@@ -1,4 +1,3 @@
-// redux/contestsSlice.ts
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 
 const codeforceurl = "https://codeforces.com/api/contest.list";
@@ -18,6 +17,27 @@ interface ContestSource {
   apiUrls: string[];
 }
 
+interface CodeforcesContest {
+  id: number;
+  name: string;
+  startTimeSeconds: number;
+  durationSeconds: number;
+}
+
+interface CodechefContest {
+  contest_code: string;
+  contest_name: string;
+  contest_start_date_iso: string;
+  contest_duration: string;
+}
+
+interface LeetCodeContest {
+  titleSlug: string;
+  title: string;
+  duration?: number;
+  startTime: number;
+}
+
 interface ContestsState {
   contests: Contest[];
   status: 'idle' | 'loading' | 'succeeded' | 'failed';
@@ -33,9 +53,11 @@ const initialState: ContestsState = {
   status: 'idle',
   error: null,
   filter: '',
-  sources: [{ name: 'Codeforces', apiUrls: [codeforceurl] },
-  { name: 'Codechef', apiUrls: [ `/api/codechef/contests/future`, `/api/codechef/contests/past` ] },
-  { name: 'LeetCode',  apiUrls: [ `/api/leetcode/contests`, `/api/leetcode/upcoming-contests` ] }],
+  sources: [
+    { name: 'Codeforces', apiUrls: [codeforceurl] },
+    { name: 'Codechef', apiUrls: [ `/api/codechef/contests/future`, `/api/codechef/contests/past` ] },
+    { name: 'LeetCode',  apiUrls: [ `/api/leetcode/contests`, `/api/leetcode/upcoming-contests` ] }
+  ],
   bookmarks: [],
   selectedSources: []
 };
@@ -62,7 +84,6 @@ export const fetchContests = createAsyncThunk(
   'contests/fetchContests',
   async (_, { rejectWithValue }) => {
     try {
-      // Use the same sources defined in initialState
       const sources: ContestSource[] = [
         { name: 'Codeforces', apiUrls: [codeforceurl] },
         { name: 'Codechef', apiUrls: [ `/api/codechef/contests/future`, `/api/codechef/contests/past` ] },
@@ -74,7 +95,6 @@ export const fetchContests = createAsyncThunk(
       for (const source of sources) {
         let contestsFromSource: Contest[] = [];
 
-        // Run all endpoints concurrently for this source.
         const endpointPromises = source.apiUrls.map(url =>
           fetch(url).then(async (res) => {
             if (!res.ok) {
@@ -84,7 +104,6 @@ export const fetchContests = createAsyncThunk(
           })
         );
 
-        // Use Promise.allSettled so that failures in one endpoint won’t break others.
         const settledEndpoints = await Promise.allSettled(endpointPromises);
 
         for (const result of settledEndpoints) {
@@ -93,11 +112,12 @@ export const fetchContests = createAsyncThunk(
             let contestsData: Contest[] = [];
 
             if (source.name === 'Codeforces') {
-              if (data.status !== 'OK' || !Array.isArray(data.result)) {
-                // Skip this endpoint if API response is not valid
+              const cfData = data as { status: string; result: unknown[] };
+              if (cfData.status !== 'OK' || !Array.isArray(cfData.result)) {
                 continue;
               }
-              contestsData = data.result.map((cf: any) => {
+              contestsData = cfData.result.map((cfItem: unknown) => {
+                const cf = cfItem as CodeforcesContest;
                 const startTimeSeconds = cf.startTimeSeconds;
                 const durationSeconds = cf.durationSeconds;
                 const endTimeSeconds = startTimeSeconds + durationSeconds;
@@ -115,37 +135,40 @@ export const fetchContests = createAsyncThunk(
                 };
               });
             } else if (source.name === 'Codechef') {
-              if (data.status !== 'success' || !Array.isArray(data.contests)) {
+              const ccData = data as { status: string; contests: unknown[] };
+              if (ccData.status !== 'success' || !Array.isArray(ccData.contests)) {
                 continue;
               }
-              contestsData = data.contests.map((c: any) => {
-                const startTimeSeconds = Math.floor(new Date(c.contest_start_date_iso).getTime() / 1000);
-                const durationSeconds = parseInt(c.contest_duration, 10) * 60;
+              contestsData = ccData.contests.map((ccItem: unknown) => {
+                const cc = ccItem as CodechefContest;
+                const startTimeSeconds = Math.floor(new Date(cc.contest_start_date_iso).getTime() / 1000);
+                const durationSeconds = parseInt(cc.contest_duration, 10) * 60;
                 const endTimeSeconds = startTimeSeconds + durationSeconds;
                 let status: Contest['status'] = 'UPCOMING';
                 if (currentTime > endTimeSeconds) status = 'PAST';
                 else if (currentTime >= startTimeSeconds) status = 'RUNNING';
-                const name = c.contest_name.replace(/\s*\(.*?\)/, '');
+                const name = cc.contest_name.replace(/\s*\(.*?\)/, '');
                 return {
-                  id: c.contest_code,
+                  id: cc.contest_code,
                   name,
                   durationSeconds,
                   startTimeSeconds,
                   source: 'Codechef',
                   status,
-                  url: `https://www.codechef.com/${c.contest_code}`
+                  url: `https://www.codechef.com/${cc.contest_code}`
                 };
               });
             } else if (source.name === 'LeetCode') {
-              // Merge both possible shapes from LeetCode
-              let leetData: any[] = [];
-              if (data?.data?.pastContests?.data && Array.isArray(data.data.pastContests.data)) {
-                leetData = leetData.concat(data.data.pastContests.data);
+              let leetData: unknown[] = [];
+              const lcData = data as { data?: { pastContests?: { data: unknown[] }, topTwoContests?: unknown[] } };
+              if (lcData.data?.pastContests?.data && Array.isArray(lcData.data.pastContests.data)) {
+                leetData = leetData.concat(lcData.data.pastContests.data);
               }
-              if (data?.data?.topTwoContests && Array.isArray(data.data.topTwoContests)) {
-                leetData = leetData.concat(data.data.topTwoContests);
+              if (lcData.data?.topTwoContests && Array.isArray(lcData.data.topTwoContests)) {
+                leetData = leetData.concat(lcData.data.topTwoContests);
               }
-              contestsData = leetData.map((lc: any) => {
+              contestsData = leetData.map((lcItem: unknown) => {
+                const lc = lcItem as LeetCodeContest;
                 let status: Contest['status'] = 'PAST';
                 if (lc.startTime > currentTime) status = 'UPCOMING';
                 return {
@@ -162,7 +185,6 @@ export const fetchContests = createAsyncThunk(
 
             contestsFromSource = contestsFromSource.concat(contestsData);
           }
-          // Skip endpoints that were rejected.
         }
         allContests = allContests.concat(contestsFromSource);
       }
@@ -172,8 +194,8 @@ export const fetchContests = createAsyncThunk(
       }
       allContests.sort((a, b) => a.startTimeSeconds - b.startTimeSeconds);
       return allContests;
-    } catch (err: any) {
-      return rejectWithValue(err.message);
+    } catch (err: unknown) {
+      return rejectWithValue((err as Error).message);
     }
   }
 );

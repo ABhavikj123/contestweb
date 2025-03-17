@@ -1,5 +1,4 @@
-'use client'
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAppSelector } from '../hooks/reduxhook';
 import { Contest } from '../redux/reducer/ContestsSlice';
 import ContestCard from './ContestCard';
@@ -36,14 +35,13 @@ const ContestList: React.FC<ContestListProps> = ({ type, reverse = false }) => {
     return a.startTimeSeconds - b.startTimeSeconds;
   });
 
-
   const paginated = filtered.slice(0, page * PAGE_SIZE);
 
-  const handleLoadMore = () => {
+  const handleLoadMore = useCallback(() => {
     if (paginated.length < filtered.length) {
       setPage((prev) => prev + 1);
     }
-  };
+  }, [paginated.length, filtered.length]);
 
   useEffect(() => {
     const onScroll = () => {
@@ -53,7 +51,7 @@ const ContestList: React.FC<ContestListProps> = ({ type, reverse = false }) => {
     };
     window.addEventListener('scroll', onScroll);
     return () => window.removeEventListener('scroll', onScroll);
-  }, [paginated.length, filtered.length]);
+  }, [handleLoadMore]);
 
   return (
     <div className="w-full mx-auto">

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-export async function GET(request: Request) {
+export async function GET() {
   try {
     const apiUrl = 'https://www.codechef.com/api/list/contests/future?sort_by=START&sorting_order=desc&offset=0&mode=all';
     const response = await fetch(apiUrl);

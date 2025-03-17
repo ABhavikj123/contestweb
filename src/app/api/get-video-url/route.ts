@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-export async function POST(request: Request) {
+export async function POST(request: Request): Promise<Response> {
   try {
     const body = await request.json();
     const { name } = body;
@@ -31,17 +31,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ videoUrl: null });
     }
     
-    let data: any;
+    let data: unknown;
     try {
       data = JSON.parse(match[1]);
-    } catch (error: any) {
-      console.error("Failed to parse ytInitialData:", error.message);
+    } catch (error: unknown) {
+      console.error("Failed to parse ytInitialData:", (error as Error).message);
       return NextResponse.json({ videoUrl: null });
     }
     
-    const contents =
-      data?.contents?.twoColumnSearchResultsRenderer?.primaryContents
-        ?.sectionListRenderer?.contents || [];
+    
+    const contents = ((data as { contents?: any })?.contents?.twoColumnSearchResultsRenderer?.primaryContents
+        ?.sectionListRenderer?.contents) || [];
     const results: { vid: string; videoTitle: string; channelName: string }[] = [];
     
     for (const section of contents) {
@@ -52,15 +52,10 @@ export async function POST(request: Request) {
         
         const vid = videoRenderer.videoId;
         const titleRuns = videoRenderer.title?.runs;
-        const channelName =
-          videoRenderer.ownerText?.runs?.[0]?.text?.toLowerCase() || "";
+        const channelName = videoRenderer.ownerText?.runs?.[0]?.text?.toLowerCase() || "";
         if (!vid || !titleRuns) continue;
         
-        const videoTitle = titleRuns
-          .map((run: { text: string }) => run.text)
-          .join("")
-          .trim();
-          
+        const videoTitle = titleRuns.map((run: { text: string }) => run.text).join("").trim();
         results.push({ vid, videoTitle, channelName });
       }
     }
@@ -84,10 +79,7 @@ export async function POST(request: Request) {
     const tleNearMatch = results.find(
       (x) =>
         x.channelName.includes("tle eliminators") &&
-        x.videoTitle
-          .toLowerCase()
-          .replace(/[-\s|]+/g, "")
-          .includes(name.toLowerCase().replace(/[-\s|]+/g, ""))
+        x.videoTitle.toLowerCase().replace(/[-\s|]+/g, "").includes(name.toLowerCase().replace(/[-\s|]+/g, ""))
     );
     
     if (tleNearMatch) {
@@ -104,8 +96,8 @@ export async function POST(request: Request) {
     
     return NextResponse.json({ videoUrl: null });
     
-  } catch (error: any) {
-    console.error("Error in get-video-url:", error.message);
+  } catch (error: unknown) {
+    console.error("Error in get-video-url:", (error as Error).message);
     return NextResponse.json({ videoUrl: null }, { status: 500 });
   }
 }
