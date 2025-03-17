@@ -1,5 +1,17 @@
 import { NextResponse } from 'next/server';
 
+interface LeetCodeResponse {
+  data: {
+    pastContests: {
+      data: {
+        title: string;
+        titleSlug: string;
+        startTime: number;
+      }[];
+    };
+  };
+}
+
 export async function GET() {
   try {
     const graphqlQuery = {
@@ -31,9 +43,9 @@ export async function GET() {
       throw new Error(`LeetCode fetch failed with status: ${response.status}`);
     }
 
-    const data = await response.json();
+    const data: LeetCodeResponse = await response.json();
     return NextResponse.json(data);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error fetching LeetCode contests:', error);
     return NextResponse.json(
       { error: 'Failed to fetch LeetCode contests' },
