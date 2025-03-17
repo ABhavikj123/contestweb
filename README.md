@@ -1,6 +1,8 @@
 # Contest Web Application
 
-[Watch the sample video](./sample.mp4)
+<video src="./assets/sample.mp4" controls="controls" style="max-width: 100%;">
+</video>
+
 ## Overview
 This project is a web application built with Next.js that aggregates programming contest data from multiple sources. Contests are fetched from Codeforces, Codechef, and LeetCode. Users can view contests that are running, upcoming, or past and even filter the contests by source. In addition, contests can be bookmarked (stored locally in the browser).
 
