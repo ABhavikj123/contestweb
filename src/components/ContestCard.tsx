@@ -3,7 +3,7 @@
 import React from "react";
 import { useAppDispatch, useAppSelector } from "../hooks/reduxhook";
 import { toggleBookmark, Contest } from "../redux/reducer/ContestsSlice";
-// Using react-icons for Heroicons alternatives
+
 import {
   HiOutlineLink,
   HiOutlineBookmark,
@@ -29,7 +29,7 @@ const ContestCard: React.FC<ContestCardProps> = ({ contest, isDark }) => {
   const formatDuration = (seconds: number): string => {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
-    return hours === 0 ? `${minutes} minutes` : `${hours}h ${minutes}m`;
+    return hours === 0 ? `${minutes} minutes` : minutes === 0 ? `${hours}h` : `${hours}h ${minutes}m`;
   };
 
   const getStatusColor = (status: string) => {

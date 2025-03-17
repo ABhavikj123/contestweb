@@ -2,7 +2,7 @@
 
 
 ## Overview
-This project is a web application built with Next.js that aggregates programming contest data from multiple sources. Contests are fetched from Codeforces, Codechef, and LeetCode. Users can view contests that are running, upcoming, or past and even filter the contests by source. In addition, contests can be bookmarked (stored locally in the browser).
+This project is a web application built with Next.js that aggregates programming contest data from multiple sources. Contests are fetched from Codeforces, Codechef, and LeetCode. Users can view contests that are running, upcoming, or past and even filter the contests by source. In addition, contests can be bookmarked (stored locally in the browser).Provide solution link to direct to the youtube solurion video of that contest.
 
 ## Tech Stack
 - **Next.js 15** (App Router)
