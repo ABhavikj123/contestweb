@@ -49,14 +49,13 @@ export async function POST(request: Request): Promise<NextResponse> {
     const { name } = body;
 
     if (!name) {
-      console.log("No contest name provided");
       return NextResponse.json({ videoUrl: null }, { status: 400 });
     }
 
     // Construct the YouTube search query
     const searchQuery = `${name} solution`;
     const searchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(searchQuery)}`;
-    console.log("Executing search with query:", searchQuery);
+
 
     // Fetch YouTube search results
     const response = await fetch(searchUrl, {
@@ -67,7 +66,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       },
     });
 
-    if (!response.ok) {
+    if(!response.ok){
       console.error(`Fetch failed with status: ${response.status}`);
       throw new Error("Failed to fetch YouTube search results");
     }
@@ -83,7 +82,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     const data: YtInitialData = JSON.parse(match[1]);
     const contents =
       data?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents || [];
-    console.log("Found contents length:", contents.length);
+    
 
     if (contents.length === 0) {
       console.log("No search results found");
@@ -126,7 +125,6 @@ export async function POST(request: Request): Promise<NextResponse> {
     );
 
     if (tleVideo) {
-      console.log("Found TLE Eliminators video:", tleVideo.title);
       return NextResponse.json({
         videoUrl: `https://www.youtube.com/watch?v=${tleVideo.videoId}`,
       });
@@ -140,7 +138,6 @@ export async function POST(request: Request): Promise<NextResponse> {
     );
 
     if (otherVideo) {
-      console.log("Found fallback video with 'solution':", otherVideo.title);
       return NextResponse.json({
         videoUrl: `https://www.youtube.com/watch?v=${otherVideo.videoId}`,
       });
@@ -158,14 +155,13 @@ export async function POST(request: Request): Promise<NextResponse> {
     });
 
     if (fallbackVideo) {
-      console.log("Found broader fallback video:", fallbackVideo.title);
       return NextResponse.json({
         videoUrl: `https://www.youtube.com/watch?v=${fallbackVideo.videoId}`,
       });
     }
 
     // 4. No video found
-    console.log("No suitable video found for:", name);
+    
     return NextResponse.json({ videoUrl: null });
 
   } catch (error: unknown) {
