@@ -42,7 +42,7 @@ interface RequestBody {
 const normalize = (str: string): string =>
   str.toLowerCase().replace(/[^a-z0-9 ]/g, "").trim();
 
-// Utility to check if title includes all contest name words in order
+// Utility to check if title includes all words in order
 function includesInOrder(title: string, words: string[]): boolean {
   let index = -1;
   for (const word of words) {
@@ -62,8 +62,9 @@ export async function POST(request: Request): Promise<NextResponse> {
       return NextResponse.json({ videoUrl: null }, { status: 400 });
     }
 
-    // Construct the YouTube search query
-    const searchQuery = `${name} solution`;
+    // Construct a specific YouTube search query
+    // Using quotes around the contest name for exact matches
+    const searchQuery = `"${name}" solution`;
     const searchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(searchQuery)}`;
 
     // Fetch YouTube search results
@@ -112,11 +113,6 @@ export async function POST(request: Request): Promise<NextResponse> {
       }
     }
 
-    console.log(
-      "Parsed videos:",
-      videos.map((v) => ({ title: v.title, channel: v.channel }))
-    );
-
     if (videos.length === 0) {
       console.log("No valid video entries found");
       return NextResponse.json({ videoUrl: null });
@@ -125,8 +121,10 @@ export async function POST(request: Request): Promise<NextResponse> {
     // Normalize the contest name and split into words
     const normalizedName = normalize(name);
     const contestWords = name.toLowerCase().split(/\s+/);
+    // Assume the first word is the contest source (e.g., "leetcode", "codeforces")
+    const contestSource = contestWords[0];
 
-    // Priority 1: "TLE Eliminators" video where title starts with contest name
+    // Priority 1: Find the first video from "TLE Eliminators" where title starts with contest name
     const tleVideo = videos.find(
       (v) =>
         v.channel.includes("tle eliminators") &&
@@ -139,12 +137,18 @@ export async function POST(request: Request): Promise<NextResponse> {
       });
     }
 
-    // Priority 2: Any video with contest name words in order and a solution keyword
+    // Priority 2: Find the first video with contest name, contest source, and "contest"
     const solutionKeywords = ["solution", "explanation", "tutorial", "walkthrough"];
     const otherVideo = videos.find(
-      (v) =>
-        includesInOrder(normalize(v.title), contestWords) &&
-        solutionKeywords.some((keyword) => normalize(v.title).includes(keyword))
+      (v) => {
+        const normalizedTitle = normalize(v.title);
+        return (
+          includesInOrder(normalizedTitle, contestWords) && // All contest name words in order
+          normalizedTitle.includes(contestSource) &&        // Contest source (e.g., "leetcode")
+          normalizedTitle.includes("contest") &&            // Word "contest"
+          solutionKeywords.some((keyword) => normalizedTitle.includes(keyword)) // Solution keyword
+        );
+      }
     );
 
     if (otherVideo) {
@@ -153,7 +157,8 @@ export async function POST(request: Request): Promise<NextResponse> {
       });
     }
 
-    // No video found
+    // Priority 3: No video found
+    console.log(`No video found for contest: ${name}`);
     return NextResponse.json({ videoUrl: null });
 
   } catch (error: unknown) {
