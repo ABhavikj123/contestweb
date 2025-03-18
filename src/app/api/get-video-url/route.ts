@@ -38,19 +38,15 @@ interface RequestBody {
   name: string;
 }
 
-// Utility to normalize strings (lowercase and remove non-alphanumeric characters)
-const normalize = (str: string): string =>
-  str.toLowerCase().replace(/[^a-z0-9 ]/g, "").trim();
-
-// Utility to check if title includes all words in order
-function includesInOrder(title: string, words: string[]): boolean {
-  let index = -1;
-  for (const word of words) {
-    index = title.indexOf(word, index + 1);
-    if (index === -1) return false;
-  }
-  return true;
-}
+// Utility to normalize strings (lowercase, trim, standardize parentheses, remove periods)
+const normalize = (str: string): string => {
+  return str
+    .toLowerCase()
+    .trim()
+    .replace(/\s*\(\s*/g, "(") // Remove spaces before "("
+    .replace(/\s*\)\s*/g, ")") // Remove spaces after ")"
+    .replace(/\./g, ""); // Remove periods
+};
 
 export async function POST(request: Request): Promise<NextResponse> {
   try {
@@ -59,12 +55,15 @@ export async function POST(request: Request): Promise<NextResponse> {
     const { name } = body;
 
     if (!name) {
+      console.log("No contest name provided");
       return NextResponse.json({ videoUrl: null }, { status: 400 });
     }
 
-    // Construct a specific YouTube search query
-    // Using quotes around the contest name for exact matches
-    const searchQuery = `"${name}" solution`;
+    const TLE_CHANNEL = "tle eliminators - by priyansh";
+    const normalizedContestName = normalize(name);
+
+    // Construct the YouTube search query with contest name and channel
+    const searchQuery = `"${name}" "TLE Eliminators"`;
     const searchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(searchQuery)}`;
 
     // Fetch YouTube search results
@@ -104,11 +103,11 @@ export async function POST(request: Request): Promise<NextResponse> {
       const items = section?.itemSectionRenderer?.contents || [];
       for (const item of items) {
         const vr = item?.videoRenderer;
-        if (!vr?.videoId || !vr?.title?.runs) continue;
+        if (!vr?.videoId || !vr?.title?.runs || !vr?.ownerText?.runs) continue;
 
         const videoId = vr.videoId;
         const title = vr.title.runs.map((run) => run.text).join("").trim();
-        const channel = vr.ownerText?.runs?.[0]?.text?.toLowerCase() || "";
+        const channel = vr.ownerText.runs[0].text.toLowerCase();
         videos.push({ videoId, title, channel });
       }
     }
@@ -118,47 +117,28 @@ export async function POST(request: Request): Promise<NextResponse> {
       return NextResponse.json({ videoUrl: null });
     }
 
-    // Normalize the contest name and split into words
-    const normalizedName = normalize(name);
-    const contestWords = name.toLowerCase().split(/\s+/);
-    // Assume the first word is the contest source (e.g., "leetcode", "codeforces")
-    const contestSource = contestWords[0];
+    
 
-    // Priority 1: Find the first video from "TLE Eliminators" where title starts with contest name
-    const tleVideo = videos.find(
-      (v) =>
-        v.channel.includes("tle eliminators") &&
-        normalize(v.title).startsWith(normalizedName)
-    );
+    // Find a video where:
+    // 1. The title contains the exact contest name (after normalization)
+    // 2. The title contains "| TLE Eliminators"
+    // 3. The channel matches "tle eliminators - by priyansh"
+    const matchingVideo = videos.find((v) => {
+      const normalizedTitle = normalize(v.title);
+      const hasExactContestName = normalizedTitle.includes(normalizedContestName);
+      const hasTLESignature = normalizedTitle.includes("| tle eliminators");
+      const isTLEChannel = v.channel === TLE_CHANNEL;
+      return hasExactContestName && hasTLESignature && isTLEChannel;
+    });
 
-    if (tleVideo) {
+    if (matchingVideo) {
+      console.log(`Found matching video: "${matchingVideo.title}" from "${matchingVideo.channel}"`);
       return NextResponse.json({
-        videoUrl: `https://www.youtube.com/watch?v=${tleVideo.videoId}`,
+        videoUrl: `https://www.youtube.com/watch?v=${matchingVideo.videoId}`,
       });
     }
 
-    // Priority 2: Find the first video with contest name, contest source, and "contest"
-    const solutionKeywords = ["solution", "explanation", "tutorial", "walkthrough"];
-    const otherVideo = videos.find(
-      (v) => {
-        const normalizedTitle = normalize(v.title);
-        return (
-          includesInOrder(normalizedTitle, contestWords) && // All contest name words in order
-          normalizedTitle.includes(contestSource) &&        // Contest source (e.g., "leetcode")
-          normalizedTitle.includes("contest") &&            // Word "contest"
-          solutionKeywords.some((keyword) => normalizedTitle.includes(keyword)) // Solution keyword
-        );
-      }
-    );
-
-    if (otherVideo) {
-      return NextResponse.json({
-        videoUrl: `https://www.youtube.com/watch?v=${otherVideo.videoId}`,
-      });
-    }
-
-    // Priority 3: No video found
-    console.log(`No video found for contest: ${name}`);
+    console.log(`No video found with title containing "${name}" and "| TLE Eliminators" from "${TLE_CHANNEL}"`);
     return NextResponse.json({ videoUrl: null });
 
   } catch (error: unknown) {
