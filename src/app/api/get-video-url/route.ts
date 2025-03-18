@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+// Type definitions for YouTube's ytInitialData structure
 interface YtInitialData {
   contents?: {
     twoColumnSearchResultsRenderer?: {
@@ -32,17 +33,32 @@ interface VideoRenderer {
   };
 }
 
-export async function POST(request: Request): Promise<Response> {
+// Request body type
+interface RequestBody {
+  name: string;
+}
+
+// Utility to normalize strings (lowercase and remove non-alphanumeric characters)
+const normalize = (str: string): string =>
+  str.toLowerCase().replace(/[^a-z0-9 ]/g, "").trim();
+
+export async function POST(request: Request): Promise<NextResponse> {
   try {
-    const body = await request.json();
+    // Parse the request body
+    const body: RequestBody = await request.json();
     const { name } = body;
+
     if (!name) {
-      console.log("No title provided");
-      return NextResponse.json({ videoUrl: null });
+      console.log("No contest name provided");
+      return NextResponse.json({ videoUrl: null }, { status: 400 });
     }
 
-    const searchQuery = `"${name}" "TLE Eliminators"`;
+    // Construct the YouTube search query
+    const searchQuery = `${name} solution`;
     const searchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(searchQuery)}`;
+    console.log("Executing search with query:", searchQuery);
+
+    // Fetch YouTube search results
     const response = await fetch(searchUrl, {
       headers: {
         "User-Agent":
@@ -52,81 +68,108 @@ export async function POST(request: Request): Promise<Response> {
     });
 
     if (!response.ok) {
-      console.error(`HTTP error! Status: ${response.status}`);
-      throw new Error("Failed to fetch search results");
+      console.error(`Fetch failed with status: ${response.status}`);
+      throw new Error("Failed to fetch YouTube search results");
     }
 
+    // Extract ytInitialData from the HTML
     const html = await response.text();
     const match = html.match(/var ytInitialData = ({.*?});<\/script>/);
     if (!match || !match[1]) {
-      console.error("No ytInitialData found");
+      console.error("ytInitialData not found in HTML");
       return NextResponse.json({ videoUrl: null });
     }
 
-    let data: YtInitialData;
-    try {
-      data = JSON.parse(match[1]);
-    } catch (error: unknown) {
-      console.error("Failed to parse ytInitialData:", (error as Error).message);
+    const data: YtInitialData = JSON.parse(match[1]);
+    const contents =
+      data?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents || [];
+    console.log("Found contents length:", contents.length);
+
+    if (contents.length === 0) {
+      console.log("No search results found");
       return NextResponse.json({ videoUrl: null });
     }
 
-    const contents = data?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents || [];
-    const results: { vid: string; videoTitle: string; channelName: string }[] = [];
-
+    // Parse video results
+    const videos: { videoId: string; title: string; channel: string }[] = [];
     for (const section of contents) {
       const items = section?.itemSectionRenderer?.contents || [];
       for (const item of items) {
-        const videoRenderer = item?.videoRenderer; 
-        if (!videoRenderer) continue;
+        const vr = item?.videoRenderer;
+        if (!vr?.videoId || !vr?.title?.runs) continue;
 
-        const vid = videoRenderer.videoId;
-        const titleRuns = videoRenderer.title?.runs;
-        const channelName = videoRenderer.ownerText?.runs?.[0]?.text?.toLowerCase() || "";
-        if (!vid || !titleRuns) continue;
-
-        const videoTitle = titleRuns.map((run: { text: string }) => run.text).join("").trim();
-        results.push({ vid, videoTitle, channelName });
+        const videoId = vr.videoId;
+        const title = vr.title.runs.map((run) => run.text).join("").trim();
+        const channel = vr.ownerText?.runs?.[0]?.text?.toLowerCase() || "";
+        videos.push({ videoId, title, channel });
       }
     }
 
-    if (results.length === 0) {
-      console.log(`No video results found for "${name}"`);
+    console.log(
+      "Parsed videos:",
+      videos.map((v) => ({ title: v.title, channel: v.channel }))
+    );
+
+    if (videos.length === 0) {
+      console.log("No valid video entries found");
       return NextResponse.json({ videoUrl: null });
     }
 
-    const tleExactMatch = results.find(
-      (x) =>
-        x.channelName.includes("tle eliminators") &&
-        x.videoTitle.toLowerCase() === name.toLowerCase()
+    // Normalize the contest name
+    const normalizedName = normalize(name);
+
+    // 1. First priority: Find a video from "TLE Eliminators" where the title starts with the contest name
+    const tleVideo = videos.find(
+      (v) =>
+        v.channel === "tle eliminators" && // Note: Adjusted case to match normalization
+        normalize(v.title).startsWith(normalizedName)
     );
 
-    if (tleExactMatch) {
-      console.log(`Found exact TLE Eliminators match: ${tleExactMatch.videoTitle}`);
-      return NextResponse.json({ videoUrl: `https://www.youtube.com/watch?v=${tleExactMatch.vid}` });
+    if (tleVideo) {
+      console.log("Found TLE Eliminators video:", tleVideo.title);
+      return NextResponse.json({
+        videoUrl: `https://www.youtube.com/watch?v=${tleVideo.videoId}`,
+      });
     }
 
-    const tleNearMatch = results.find(
-      (x) =>
-        x.channelName.includes("tle eliminators") &&
-        x.videoTitle.toLowerCase().replace(/[-\s|]+/g, "").includes(name.toLowerCase().replace(/[-\s|]+/g, ""))
+    // 2. Existing fallback: Find any video with the contest name and "solution"
+    const otherVideo = videos.find(
+      (v) =>
+        normalize(v.title).includes(normalizedName) &&
+        normalize(v.title).includes("solution")
     );
 
-    if (tleNearMatch) {
-      return NextResponse.json({ videoUrl: `https://www.youtube.com/watch?v=${tleNearMatch.vid}` });
+    if (otherVideo) {
+      console.log("Found fallback video with 'solution':", otherVideo.title);
+      return NextResponse.json({
+        videoUrl: `https://www.youtube.com/watch?v=${otherVideo.videoId}`,
+      });
     }
 
-    const anyExactMatch = results.find(
-      (x) => x.videoTitle.toLowerCase() === name.toLowerCase()
-    );
+    // 3. New fallback: Find any video with the exact contest name and a solution-related keyword
+    const solutionKeywords = ["solution", "explanation", "tutorial", "walkthrough"];
+    const fallbackVideo = videos.find((v) => {
+      const normalizedTitle = normalize(v.title);
+      const hasContestName = normalizedTitle.includes(normalizedName);
+      const hasKeyword = solutionKeywords.some((keyword) =>
+        normalizedTitle.includes(keyword)
+      );
+      return hasContestName && hasKeyword;
+    });
 
-    if (anyExactMatch) {
-      return NextResponse.json({ videoUrl: `https://www.youtube.com/watch?v=${anyExactMatch.vid}` });
+    if (fallbackVideo) {
+      console.log("Found broader fallback video:", fallbackVideo.title);
+      return NextResponse.json({
+        videoUrl: `https://www.youtube.com/watch?v=${fallbackVideo.videoId}`,
+      });
     }
 
+    // 4. No video found
+    console.log("No suitable video found for:", name);
     return NextResponse.json({ videoUrl: null });
+
   } catch (error: unknown) {
-    console.error("Error in get-video-url:", (error as Error).message);
+    console.error("Error processing request:", (error as Error).message);
     return NextResponse.json({ videoUrl: null }, { status: 500 });
   }
 }
