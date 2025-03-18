@@ -48,6 +48,11 @@ const normalize = (str: string): string => {
     .replace(/\./g, ""); // Remove periods
 };
 
+// Utility to get the base contest name without suffixes
+const getBaseContestName = (name: string): string => {
+  return name.replace(/\(rated for div\.\s*\d\)/i, "").trim();
+};
+
 export async function POST(request: Request): Promise<NextResponse> {
   try {
     // Parse the request body
@@ -55,15 +60,15 @@ export async function POST(request: Request): Promise<NextResponse> {
     const { name } = body;
 
     if (!name) {
-      console.log("No contest name provided");
+      
       return NextResponse.json({ videoUrl: null }, { status: 400 });
     }
 
     const TLE_CHANNEL = "tle eliminators - by priyansh";
-    const normalizedContestName = normalize(name);
+    const normalizedBaseContestName = normalize(getBaseContestName(name));
 
-    // Construct the YouTube search query with contest name and channel
-    const searchQuery = `"${name}" "TLE Eliminators"`;
+    // Construct the YouTube search query with base contest name and channel
+    const searchQuery = `"${getBaseContestName(name)}" "TLE Eliminators"`;
     const searchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(searchQuery)}`;
 
     // Fetch YouTube search results
@@ -93,7 +98,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       data?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents || [];
 
     if (contents.length === 0) {
-      console.log("No search results found");
+      
       return NextResponse.json({ videoUrl: null });
     }
 
@@ -113,32 +118,35 @@ export async function POST(request: Request): Promise<NextResponse> {
     }
 
     if (videos.length === 0) {
-      console.log("No valid video entries found");
+      
       return NextResponse.json({ videoUrl: null });
     }
 
     
 
     // Find a video where:
-    // 1. The title contains the exact contest name (after normalization)
+    // 1. The title contains the base contest name (after normalization)
     // 2. The title contains "| TLE Eliminators"
     // 3. The channel matches "tle eliminators - by priyansh"
     const matchingVideo = videos.find((v) => {
       const normalizedTitle = normalize(v.title);
-      const hasExactContestName = normalizedTitle.includes(normalizedContestName);
+      const hasExactContestName = normalizedTitle.includes(normalizedBaseContestName);
       const hasTLESignature = normalizedTitle.includes("| tle eliminators");
       const isTLEChannel = v.channel === TLE_CHANNEL;
+
+      
+
       return hasExactContestName && hasTLESignature && isTLEChannel;
     });
 
     if (matchingVideo) {
-      console.log(`Found matching video: "${matchingVideo.title}" from "${matchingVideo.channel}"`);
+      
       return NextResponse.json({
         videoUrl: `https://www.youtube.com/watch?v=${matchingVideo.videoId}`,
       });
     }
 
-    console.log(`No video found with title containing "${name}" and "| TLE Eliminators" from "${TLE_CHANNEL}"`);
+
     return NextResponse.json({ videoUrl: null });
 
   } catch (error: unknown) {
