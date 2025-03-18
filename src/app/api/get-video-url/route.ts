@@ -42,6 +42,16 @@ interface RequestBody {
 const normalize = (str: string): string =>
   str.toLowerCase().replace(/[^a-z0-9 ]/g, "").trim();
 
+// Utility to check if title includes all contest name words in order
+function includesInOrder(title: string, words: string[]): boolean {
+  let index = -1;
+  for (const word of words) {
+    index = title.indexOf(word, index + 1);
+    if (index === -1) return false;
+  }
+  return true;
+}
+
 export async function POST(request: Request): Promise<NextResponse> {
   try {
     // Parse the request body
@@ -56,7 +66,6 @@ export async function POST(request: Request): Promise<NextResponse> {
     const searchQuery = `${name} solution`;
     const searchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(searchQuery)}`;
 
-
     // Fetch YouTube search results
     const response = await fetch(searchUrl, {
       headers: {
@@ -66,7 +75,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       },
     });
 
-    if(!response.ok){
+    if (!response.ok) {
       console.error(`Fetch failed with status: ${response.status}`);
       throw new Error("Failed to fetch YouTube search results");
     }
@@ -82,7 +91,6 @@ export async function POST(request: Request): Promise<NextResponse> {
     const data: YtInitialData = JSON.parse(match[1]);
     const contents =
       data?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents || [];
-    
 
     if (contents.length === 0) {
       console.log("No search results found");
@@ -114,13 +122,14 @@ export async function POST(request: Request): Promise<NextResponse> {
       return NextResponse.json({ videoUrl: null });
     }
 
-    // Normalize the contest name
+    // Normalize the contest name and split into words
     const normalizedName = normalize(name);
+    const contestWords = name.toLowerCase().split(/\s+/);
 
-    // 1. First priority: Find a video from "TLE Eliminators" where the title starts with the contest name
+    // Priority 1: "TLE Eliminators" video where title starts with contest name
     const tleVideo = videos.find(
       (v) =>
-        v.channel === "tle eliminators" && // Note: Adjusted case to match normalization
+        v.channel.includes("tle eliminators") &&
         normalize(v.title).startsWith(normalizedName)
     );
 
@@ -130,11 +139,12 @@ export async function POST(request: Request): Promise<NextResponse> {
       });
     }
 
-    // 2. Existing fallback: Find any video with the contest name and "solution"
+    // Priority 2: Any video with contest name words in order and a solution keyword
+    const solutionKeywords = ["solution", "explanation", "tutorial", "walkthrough"];
     const otherVideo = videos.find(
       (v) =>
-        normalize(v.title).includes(normalizedName) &&
-        normalize(v.title).includes("solution")
+        includesInOrder(normalize(v.title), contestWords) &&
+        solutionKeywords.some((keyword) => normalize(v.title).includes(keyword))
     );
 
     if (otherVideo) {
@@ -143,25 +153,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       });
     }
 
-    // 3. New fallback: Find any video with the exact contest name and a solution-related keyword
-    const solutionKeywords = ["solution", "explanation", "tutorial", "walkthrough"];
-    const fallbackVideo = videos.find((v) => {
-      const normalizedTitle = normalize(v.title);
-      const hasContestName = normalizedTitle.includes(normalizedName);
-      const hasKeyword = solutionKeywords.some((keyword) =>
-        normalizedTitle.includes(keyword)
-      );
-      return hasContestName && hasKeyword;
-    });
-
-    if (fallbackVideo) {
-      return NextResponse.json({
-        videoUrl: `https://www.youtube.com/watch?v=${fallbackVideo.videoId}`,
-      });
-    }
-
-    // 4. No video found
-    
+    // No video found
     return NextResponse.json({ videoUrl: null });
 
   } catch (error: unknown) {
