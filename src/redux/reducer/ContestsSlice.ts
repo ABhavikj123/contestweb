@@ -55,8 +55,8 @@ const initialState: ContestsState = {
   filter: '',
   sources: [
     { name: 'Codeforces', apiUrls: [codeforceurl] },
-    { name: 'Codechef', apiUrls: [ `/api/codechef/contests/future`, `/api/codechef/contests/past` ] },
-    { name: 'LeetCode',  apiUrls: [ `/api/leetcode/contests`, `/api/leetcode/upcoming-contests` ] }
+    // { name: 'Codechef', apiUrls: [ `/api/codechef/contests/future`, `/api/codechef/contests/past` ] },
+    // { name: 'LeetCode',  apiUrls: [ `/api/leetcode/contests`, `/api/leetcode/upcoming-contests` ] }
   ],
   bookmarks: [],
   selectedSources: []
@@ -86,8 +86,8 @@ export const fetchContests = createAsyncThunk(
     try {
       const sources: ContestSource[] = [
         { name: 'Codeforces', apiUrls: [codeforceurl] },
-        { name: 'Codechef', apiUrls: [ `/api/codechef/contests/future`, `/api/codechef/contests/past` ] },
-        { name: 'LeetCode',  apiUrls: [ `/api/leetcode/contests`, `/api/leetcode/upcoming-contests` ] }
+        // { name: 'Codechef', apiUrls: [ `/api/codechef/contests/future`, `/api/codechef/contests/past` ] },
+        // { name: 'LeetCode',  apiUrls: [ `/api/leetcode/contests`, `/api/leetcode/upcoming-contests` ] }
       ];
       let allContests: Contest[] = [];
       const currentTime = Math.floor(Date.now() / 1000);
