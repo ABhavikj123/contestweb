@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 
 export async function GET() {
   try {
-    const apiUrl = 'https://www.codechef.com/api/list/contests/future?sort_by=START&sorting_order=desc&offset=0&mode=all';
+    const apiUrl = process.env.NEXT_PUBLIC_CODECHEF_FUTURE!;
     const response = await fetch(apiUrl);
     if (!response.ok) {
       return NextResponse.json(

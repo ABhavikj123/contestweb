@@ -1,6 +1,6 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 
-const codeforceurl = "https://codeforces.com/api/contest.list";
+const codeforceurl = process.env.NEXT_PUBLIC_CODEFORCE_API!;
 
 export interface Contest {
   id: number | string;

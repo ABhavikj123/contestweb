@@ -17,8 +17,8 @@ export async function GET() {
       `,
       variables: {},
     };
-
-    const response = await fetch('https://leetcode.com/graphql/', {
+    const url=process.env.NEXT_PUBLIC_LEETCODE!
+    const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(graphqlQuery),
