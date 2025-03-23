@@ -1,21 +1,4 @@
 import { NextResponse } from "next/server";
-import { headers } from 'next/headers';
-
-// In-memory store for rate limiting
-const rateLimit = new Map<string, { count: number; timestamp: number }>();
-const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
-const MAX_REQUESTS = 30; // 30 requests per minute (tighter limit)
-
-// In-memory cache
-interface CacheData {
-  data: {
-    videoUrl?: string;
-    error?: string;
-  };
-  timestamp: number;
-}
-const cache = new Map<string, CacheData>();
-const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours (1 day)
 
 // Type definitions for YouTube's ytInitialData structure
 interface YtInitialData {
@@ -55,35 +38,6 @@ interface RequestBody {
   name: string;
 }
 
-// Validate API key
-function validateApiKey(headersList: Headers): boolean {
-  const apiKey = headersList.get('x-api-key');
-  return apiKey === process.env.API_KEY;
-}
-
-// Rate limiting middleware
-function checkRateLimit(ip: string): boolean {
-  const now = Date.now();
-  const userLimit = rateLimit.get(ip);
-
-  if (!userLimit) {
-    rateLimit.set(ip, { count: 1, timestamp: now });
-    return true;
-  }
-
-  if (now - userLimit.timestamp > RATE_LIMIT_WINDOW) {
-    rateLimit.set(ip, { count: 1, timestamp: now });
-    return true;
-  }
-
-  if (userLimit.count >= MAX_REQUESTS) {
-    return false;
-  }
-
-  userLimit.count++;
-  return true;
-}
-
 // Utility to normalize strings (lowercase, trim, standardize parentheses, remove periods)
 const normalize = (str: string): string => {
   return str
@@ -101,81 +55,13 @@ const getBaseContestName = (name: string): string => {
 
 export async function POST(request: Request): Promise<NextResponse> {
   try {
-    const headersList = await headers();
-    
-    // Validate API key
-    if (!validateApiKey(headersList)) {
-      console.warn('Invalid API key attempt');
-      return NextResponse.json(
-        { error: 'Invalid API key' },
-        { 
-          status: 401,
-          headers: {
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'POST, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type, x-api-key',
-            'Access-Control-Max-Age': '86400',
-          }
-        }
-      );
-    }
-
-    // Get client IP
-    const ip = headersList.get('x-forwarded-for') || 'unknown';
-    
-    // Check rate limit
-    if (!checkRateLimit(ip)) {
-      console.warn('Rate limit exceeded for IP:', ip);
-      return NextResponse.json(
-        { error: 'Too many requests' },
-        { 
-          status: 429,
-          headers: {
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'POST, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type, x-api-key',
-            'Access-Control-Max-Age': '86400',
-            'Retry-After': '60',
-          }
-        }
-      );
-    }
-
     // Parse the request body
     const body: RequestBody = await request.json();
     const { name } = body;
 
     if (!name) {
-      return NextResponse.json(
-        { error: 'Name is required' },
-        { 
-          status: 400,
-          headers: {
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'POST, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type, x-api-key',
-            'Access-Control-Max-Age': '86400',
-          }
-        }
-      );
-    }
-
-    // Check cache
-    const cacheKey = `video-url:${name}`;
-    const cachedData = cache.get(cacheKey);
-    
-    if (cachedData && Date.now() - cachedData.timestamp < CACHE_TTL) {
-      return NextResponse.json(cachedData.data, {
-        status: 200,
-        headers: {
-          'Cache-Control': 'public, max-age=86400, stale-while-revalidate=3600',
-          'X-Cache': 'HIT',
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, x-api-key',
-          'Access-Control-Max-Age': '86400',
-        },
-      });
+      
+      return NextResponse.json({ videoUrl: null }, { status: 400 });
     }
 
     const TLE_CHANNEL = "tle eliminators - by priyansh";
@@ -188,27 +74,15 @@ export async function POST(request: Request): Promise<NextResponse> {
     // Fetch YouTube search results
     const response = await fetch(searchUrl, {
       headers: {
-        "User-Agent": "ContestWeb/1.0",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
         "Accept-Language": "en-US,en;q=0.9",
       },
-      next: { revalidate: 86400 }, // Revalidate every 24 hours
     });
 
     if (!response.ok) {
       console.error(`Fetch failed with status: ${response.status}`);
-      return NextResponse.json(
-        { error: 'Failed to fetch YouTube search results' },
-        { 
-          status: response.status,
-          headers: {
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'POST, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type, x-api-key',
-            'Access-Control-Max-Age': '86400',
-          }
-        }
-      );
+      throw new Error("Failed to fetch YouTube search results");
     }
 
     // Extract ytInitialData from the HTML
@@ -216,18 +90,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     const match = html.match(/var ytInitialData = ({.*?});<\/script>/);
     if (!match || !match[1]) {
       console.error("ytInitialData not found in HTML");
-      return NextResponse.json(
-        { error: 'Invalid YouTube response format' },
-        { 
-          status: 502,
-          headers: {
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'POST, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type, x-api-key',
-            'Access-Control-Max-Age': '86400',
-          }
-        }
-      );
+      return NextResponse.json({ videoUrl: null });
     }
 
     const data: YtInitialData = JSON.parse(match[1]);
@@ -235,18 +98,8 @@ export async function POST(request: Request): Promise<NextResponse> {
       data?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents || [];
 
     if (contents.length === 0) {
-      return NextResponse.json(
-        { error: 'No search results found' },
-        { 
-          status: 404,
-          headers: {
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'POST, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type, x-api-key',
-            'Access-Control-Max-Age': '86400',
-          }
-        }
-      );
+      
+      return NextResponse.json({ videoUrl: null });
     }
 
     // Parse video results
@@ -265,19 +118,11 @@ export async function POST(request: Request): Promise<NextResponse> {
     }
 
     if (videos.length === 0) {
-      return NextResponse.json(
-        { error: 'No valid videos found' },
-        { 
-          status: 404,
-          headers: {
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'POST, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type, x-api-key',
-            'Access-Control-Max-Age': '86400',
-          }
-        }
-      );
+      
+      return NextResponse.json({ videoUrl: null });
     }
+
+    
 
     // Find a video where:
     // 1. The title contains the base contest name (after normalization)
@@ -289,66 +134,23 @@ export async function POST(request: Request): Promise<NextResponse> {
       const hasTLESignature = normalizedTitle.includes("| tle eliminators");
       const isTLEChannel = v.channel === TLE_CHANNEL;
 
+      
+
       return hasExactContestName && hasTLESignature && isTLEChannel;
     });
 
-    const result = matchingVideo 
-      ? { videoUrl: `https://www.youtube.com/watch?v=${matchingVideo.videoId}` }
-      : { error: 'No matching video found' };
+    if (matchingVideo) {
+      
+      return NextResponse.json({
+        videoUrl: `https://www.youtube.com/watch?v=${matchingVideo.videoId}`,
+      });
+    }
 
-    // Update cache
-    cache.set(cacheKey, {
-      data: result,
-      timestamp: Date.now(),
-    });
 
-    // Update response headers to include x-api-key
-    const responseHeaders = {
-      'Cache-Control': 'public, max-age=86400, stale-while-revalidate=3600',
-      'X-Cache': 'MISS',
-      'X-Content-Type-Options': 'nosniff',
-      'X-Frame-Options': 'DENY',
-      'X-XSS-Protection': '1; mode=block',
-      'Referrer-Policy': 'strict-origin-when-cross-origin',
-      'Content-Security-Policy': "default-src 'self'",
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, x-api-key',
-      'Access-Control-Max-Age': '86400',
-      'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
-    };
-
-    // Return response with security headers
-    return NextResponse.json(result, {
-      status: matchingVideo ? 200 : 404,
-      headers: responseHeaders,
-    });
+    return NextResponse.json({ videoUrl: null });
 
   } catch (error: unknown) {
     console.error("Error processing request:", (error as Error).message);
-    return NextResponse.json(
-      { error: 'Internal Server Error' },
-      { 
-        status: 500,
-        headers: {
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'POST, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, x-api-key',
-          'Access-Control-Max-Age': '86400',
-        }
-      }
-    );
+    return NextResponse.json({ videoUrl: null }, { status: 500 });
   }
-}
-
-// Add OPTIONS handler for CORS preflight requests
-export async function OPTIONS() {
-  return NextResponse.json({}, {
-    headers: {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, x-api-key',
-      'Access-Control-Max-Age': '86400',
-    },
-  });
 }
