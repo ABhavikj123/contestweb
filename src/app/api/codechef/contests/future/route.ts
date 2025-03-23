@@ -28,19 +28,35 @@ function validateOrigin(headersList: Headers) {
   const origin = headersList.get('origin') || headersList.get('referer') || '';
   const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [];
   
-  // Allow requests with no origin (like direct browser requests)
-  if (!origin) return true;
-  
   // Log for debugging
   console.log('Request origin:', origin);
   console.log('Allowed origins:', allowedOrigins);
   
-  // Strict origin checking for production
+  // If no origin, check if it's a direct request from our frontend
+  if (!origin) {
+    const userAgent = headersList.get('user-agent') || '';
+    return userAgent.includes('Mozilla') || userAgent.includes('Chrome') || userAgent.includes('Safari');
+  }
+  
+  // Validate against allowed origins
   return allowedOrigins.some(allowed => {
     const normalizedOrigin = origin.toLowerCase().trim();
     const normalizedAllowed = allowed.toLowerCase().trim();
-    return normalizedOrigin === normalizedAllowed || 
-           normalizedOrigin === normalizedAllowed.replace('https://', 'http://');
+    
+    // Check exact match
+    if (normalizedOrigin === normalizedAllowed) return true;
+    
+    // Check without protocol
+    const originWithoutProtocol = normalizedOrigin.replace(/^https?:\/\//, '');
+    const allowedWithoutProtocol = normalizedAllowed.replace(/^https?:\/\//, '');
+    if (originWithoutProtocol === allowedWithoutProtocol) return true;
+    
+    // Check with www prefix
+    const originWithWWW = `www.${originWithoutProtocol}`;
+    const allowedWithWWW = `www.${allowedWithoutProtocol}`;
+    if (originWithWWW === allowedWithWWW) return true;
+    
+    return false;
   });
 }
 
