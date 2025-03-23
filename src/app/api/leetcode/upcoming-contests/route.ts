@@ -28,13 +28,23 @@ interface LeetCodeResponse {
 
 // Validate request origin
 function validateOrigin(headersList: Headers) {
-  const origin = headersList.get('origin') || '';
+  const origin = headersList.get('origin') || headersList.get('referer') || '';
   const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [];
   
+  // Allow requests with no origin (like direct browser requests)
+  if (!origin) return true;
+  
+  // Log for debugging
+  console.log('Request origin:', origin);
+  console.log('Allowed origins:', allowedOrigins);
+  
   // Strict origin checking for production
-  return allowedOrigins.some(allowed => 
-    origin === allowed || origin === allowed.replace('https://', 'http://')
-  );
+  return allowedOrigins.some(allowed => {
+    const normalizedOrigin = origin.toLowerCase().trim();
+    const normalizedAllowed = allowed.toLowerCase().trim();
+    return normalizedOrigin === normalizedAllowed || 
+           normalizedOrigin === normalizedAllowed.replace('https://', 'http://');
+  });
 }
 
 // Rate limiting middleware
@@ -86,8 +96,8 @@ export async function GET() {
         { 
           status: 403,
           headers: {
-            'Access-Control-Allow-Origin': process.env.ALLOWED_ORIGINS?.split(',')[0] || '',
-            'Access-Control-Allow-Methods': 'GET',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, OPTIONS',
             'Access-Control-Allow-Headers': 'Content-Type',
             'Access-Control-Max-Age': '86400',
           }
@@ -106,8 +116,8 @@ export async function GET() {
         { 
           status: 429,
           headers: {
-            'Access-Control-Allow-Origin': process.env.ALLOWED_ORIGINS?.split(',')[0] || '',
-            'Access-Control-Allow-Methods': 'GET',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, OPTIONS',
             'Access-Control-Allow-Headers': 'Content-Type',
             'Access-Control-Max-Age': '86400',
             'Retry-After': '60',
@@ -123,8 +133,8 @@ export async function GET() {
         headers: {
           'Cache-Control': 'public, max-age=86400, stale-while-revalidate=3600',
           'X-Cache': 'HIT',
-          'Access-Control-Allow-Origin': process.env.ALLOWED_ORIGINS?.split(',')[0] || '',
-          'Access-Control-Allow-Methods': 'GET',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, OPTIONS',
           'Access-Control-Allow-Headers': 'Content-Type',
           'Access-Control-Max-Age': '86400',
         },
@@ -166,8 +176,8 @@ export async function GET() {
         { 
           status: response.status,
           headers: {
-            'Access-Control-Allow-Origin': process.env.ALLOWED_ORIGINS?.split(',')[0] || '',
-            'Access-Control-Allow-Methods': 'GET',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, OPTIONS',
             'Access-Control-Allow-Headers': 'Content-Type',
             'Access-Control-Max-Age': '86400',
           }
@@ -185,8 +195,8 @@ export async function GET() {
         { 
           status: 502,
           headers: {
-            'Access-Control-Allow-Origin': process.env.ALLOWED_ORIGINS?.split(',')[0] || '',
-            'Access-Control-Allow-Methods': 'GET',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, OPTIONS',
             'Access-Control-Allow-Headers': 'Content-Type',
             'Access-Control-Max-Age': '86400',
           }
@@ -211,8 +221,8 @@ export async function GET() {
         'X-XSS-Protection': '1; mode=block',
         'Referrer-Policy': 'strict-origin-when-cross-origin',
         'Content-Security-Policy': "default-src 'self'",
-        'Access-Control-Allow-Origin': process.env.ALLOWED_ORIGINS?.split(',')[0] || '',
-        'Access-Control-Allow-Methods': 'GET',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type',
         'Access-Control-Max-Age': '86400',
         'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
@@ -225,12 +235,24 @@ export async function GET() {
       { 
         status: 500,
         headers: {
-          'Access-Control-Allow-Origin': process.env.ALLOWED_ORIGINS?.split(',')[0] || '',
-          'Access-Control-Allow-Methods': 'GET',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, OPTIONS',
           'Access-Control-Allow-Headers': 'Content-Type',
           'Access-Control-Max-Age': '86400',
         }
       }
     );
   }
+}
+
+// Add OPTIONS handler for CORS preflight requests
+export async function OPTIONS() {
+  return NextResponse.json({}, {
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Max-Age': '86400',
+    },
+  });
 }
