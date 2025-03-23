@@ -23,41 +23,10 @@ interface CodechefResponse {
   }>;
 }
 
-// Validate request origin
-function validateOrigin(headersList: Headers) {
-  const origin = headersList.get('origin') || headersList.get('referer') || '';
-  const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [];
-  
-  // Log for debugging
-  console.log('Request origin:', origin);
-  console.log('Allowed origins:', allowedOrigins);
-  
-  // If no origin, check if it's a direct request from our frontend
-  if (!origin) {
-    const userAgent = headersList.get('user-agent') || '';
-    return userAgent.includes('Mozilla') || userAgent.includes('Chrome') || userAgent.includes('Safari');
-  }
-  
-  // Validate against allowed origins
-  return allowedOrigins.some(allowed => {
-    const normalizedOrigin = origin.toLowerCase().trim();
-    const normalizedAllowed = allowed.toLowerCase().trim();
-    
-    // Check exact match
-    if (normalizedOrigin === normalizedAllowed) return true;
-    
-    // Check without protocol
-    const originWithoutProtocol = normalizedOrigin.replace(/^https?:\/\//, '');
-    const allowedWithoutProtocol = normalizedAllowed.replace(/^https?:\/\//, '');
-    if (originWithoutProtocol === allowedWithoutProtocol) return true;
-    
-    // Check with www prefix
-    const originWithWWW = `www.${originWithoutProtocol}`;
-    const allowedWithWWW = `www.${allowedWithoutProtocol}`;
-    if (originWithWWW === allowedWithWWW) return true;
-    
-    return false;
-  });
+// Validate API key
+function validateApiKey(headersList: Headers): boolean {
+  const apiKey = headersList.get('x-api-key');
+  return apiKey === process.env.API_KEY;
 }
 
 // Rate limiting middleware
@@ -101,17 +70,17 @@ export async function GET() {
   try {
     const headersList = await headers();
     
-    // Validate origin
-    if (!validateOrigin(headersList)) {
-      console.warn('Unauthorized origin attempt:', headersList.get('origin'));
+    // Validate API key
+    if (!validateApiKey(headersList)) {
+      console.warn('Invalid API key attempt');
       return NextResponse.json(
-        { error: 'Unauthorized origin' },
+        { error: 'Invalid API key' },
         { 
-          status: 403,
+          status: 401,
           headers: {
             'Access-Control-Allow-Origin': '*',
             'Access-Control-Allow-Methods': 'GET, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type',
+            'Access-Control-Allow-Headers': 'Content-Type, x-api-key',
             'Access-Control-Max-Age': '86400',
           }
         }
@@ -131,7 +100,7 @@ export async function GET() {
           headers: {
             'Access-Control-Allow-Origin': '*',
             'Access-Control-Allow-Methods': 'GET, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type',
+            'Access-Control-Allow-Headers': 'Content-Type, x-api-key',
             'Access-Control-Max-Age': '86400',
             'Retry-After': '60',
           }
@@ -148,7 +117,7 @@ export async function GET() {
           'X-Cache': 'HIT',
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'GET, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type',
+          'Access-Control-Allow-Headers': 'Content-Type, x-api-key',
           'Access-Control-Max-Age': '86400',
         },
       });
@@ -172,7 +141,7 @@ export async function GET() {
           headers: {
             'Access-Control-Allow-Origin': '*',
             'Access-Control-Allow-Methods': 'GET, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type',
+            'Access-Control-Allow-Headers': 'Content-Type, x-api-key',
             'Access-Control-Max-Age': '86400',
           }
         }
@@ -191,7 +160,7 @@ export async function GET() {
           headers: {
             'Access-Control-Allow-Origin': '*',
             'Access-Control-Allow-Methods': 'GET, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type',
+            'Access-Control-Allow-Headers': 'Content-Type, x-api-key',
             'Access-Control-Max-Age': '86400',
           }
         }
@@ -204,23 +173,26 @@ export async function GET() {
       timestamp: Date.now(),
     };
 
+    // Update response headers to include x-api-key
+    const responseHeaders = {
+      'Cache-Control': 'public, max-age=86400, stale-while-revalidate=3600',
+      'X-Cache': 'MISS',
+      'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'DENY',
+      'X-XSS-Protection': '1; mode=block',
+      'Referrer-Policy': 'strict-origin-when-cross-origin',
+      'Content-Security-Policy': "default-src 'self'",
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, x-api-key',
+      'Access-Control-Max-Age': '86400',
+      'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
+    };
+
     // Return response with security headers
     return NextResponse.json(data, {
       status: 200,
-      headers: {
-        'Cache-Control': 'public, max-age=86400, stale-while-revalidate=3600',
-        'X-Cache': 'MISS',
-        'X-Content-Type-Options': 'nosniff',
-        'X-Frame-Options': 'DENY',
-        'X-XSS-Protection': '1; mode=block',
-        'Referrer-Policy': 'strict-origin-when-cross-origin',
-        'Content-Security-Policy': "default-src 'self'",
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
-        'Access-Control-Max-Age': '86400',
-        'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
-      },
+      headers: responseHeaders,
     });
   } catch (error) {
     console.error('Error fetching Codechef past contests:', error);
@@ -231,7 +203,7 @@ export async function GET() {
         headers: {
           'Access-Control-Allow-Origin': '*',
           'Access-Control-Allow-Methods': 'GET, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type',
+          'Access-Control-Allow-Headers': 'Content-Type, x-api-key',
           'Access-Control-Max-Age': '86400',
         }
       }
@@ -245,7 +217,7 @@ export async function OPTIONS() {
     headers: {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Methods': 'GET, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Allow-Headers': 'Content-Type, x-api-key',
       'Access-Control-Max-Age': '86400',
     },
   });

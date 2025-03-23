@@ -55,15 +55,10 @@ interface RequestBody {
   name: string;
 }
 
-// Validate request origin
-function validateOrigin(headersList: Headers) {
-  const origin = headersList.get('origin') || '';
-  const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [];
-  
-  // Strict origin checking for production
-  return allowedOrigins.some(allowed => 
-    origin === allowed || origin === allowed.replace('https://', 'http://')
-  );
+// Validate API key
+function validateApiKey(headersList: Headers): boolean {
+  const apiKey = headersList.get('x-api-key');
+  return apiKey === process.env.API_KEY;
 }
 
 // Rate limiting middleware
@@ -108,17 +103,17 @@ export async function POST(request: Request): Promise<NextResponse> {
   try {
     const headersList = await headers();
     
-    // Validate origin
-    if (!validateOrigin(headersList)) {
-      console.warn('Unauthorized origin attempt:', headersList.get('origin'));
+    // Validate API key
+    if (!validateApiKey(headersList)) {
+      console.warn('Invalid API key attempt');
       return NextResponse.json(
-        { error: 'Unauthorized origin' },
+        { error: 'Invalid API key' },
         { 
-          status: 403,
+          status: 401,
           headers: {
-            'Access-Control-Allow-Origin': process.env.ALLOWED_ORIGINS?.split(',')[0] || '',
-            'Access-Control-Allow-Methods': 'POST',
-            'Access-Control-Allow-Headers': 'Content-Type',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, x-api-key',
             'Access-Control-Max-Age': '86400',
           }
         }
@@ -136,9 +131,9 @@ export async function POST(request: Request): Promise<NextResponse> {
         { 
           status: 429,
           headers: {
-            'Access-Control-Allow-Origin': process.env.ALLOWED_ORIGINS?.split(',')[0] || '',
-            'Access-Control-Allow-Methods': 'POST',
-            'Access-Control-Allow-Headers': 'Content-Type',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, x-api-key',
             'Access-Control-Max-Age': '86400',
             'Retry-After': '60',
           }
@@ -156,9 +151,9 @@ export async function POST(request: Request): Promise<NextResponse> {
         { 
           status: 400,
           headers: {
-            'Access-Control-Allow-Origin': process.env.ALLOWED_ORIGINS?.split(',')[0] || '',
-            'Access-Control-Allow-Methods': 'POST',
-            'Access-Control-Allow-Headers': 'Content-Type',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, x-api-key',
             'Access-Control-Max-Age': '86400',
           }
         }
@@ -175,9 +170,9 @@ export async function POST(request: Request): Promise<NextResponse> {
         headers: {
           'Cache-Control': 'public, max-age=86400, stale-while-revalidate=3600',
           'X-Cache': 'HIT',
-          'Access-Control-Allow-Origin': process.env.ALLOWED_ORIGINS?.split(',')[0] || '',
-          'Access-Control-Allow-Methods': 'POST',
-          'Access-Control-Allow-Headers': 'Content-Type',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, x-api-key',
           'Access-Control-Max-Age': '86400',
         },
       });
@@ -207,9 +202,9 @@ export async function POST(request: Request): Promise<NextResponse> {
         { 
           status: response.status,
           headers: {
-            'Access-Control-Allow-Origin': process.env.ALLOWED_ORIGINS?.split(',')[0] || '',
-            'Access-Control-Allow-Methods': 'POST',
-            'Access-Control-Allow-Headers': 'Content-Type',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, x-api-key',
             'Access-Control-Max-Age': '86400',
           }
         }
@@ -226,9 +221,9 @@ export async function POST(request: Request): Promise<NextResponse> {
         { 
           status: 502,
           headers: {
-            'Access-Control-Allow-Origin': process.env.ALLOWED_ORIGINS?.split(',')[0] || '',
-            'Access-Control-Allow-Methods': 'POST',
-            'Access-Control-Allow-Headers': 'Content-Type',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, x-api-key',
             'Access-Control-Max-Age': '86400',
           }
         }
@@ -245,9 +240,9 @@ export async function POST(request: Request): Promise<NextResponse> {
         { 
           status: 404,
           headers: {
-            'Access-Control-Allow-Origin': process.env.ALLOWED_ORIGINS?.split(',')[0] || '',
-            'Access-Control-Allow-Methods': 'POST',
-            'Access-Control-Allow-Headers': 'Content-Type',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, x-api-key',
             'Access-Control-Max-Age': '86400',
           }
         }
@@ -275,9 +270,9 @@ export async function POST(request: Request): Promise<NextResponse> {
         { 
           status: 404,
           headers: {
-            'Access-Control-Allow-Origin': process.env.ALLOWED_ORIGINS?.split(',')[0] || '',
-            'Access-Control-Allow-Methods': 'POST',
-            'Access-Control-Allow-Headers': 'Content-Type',
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'POST, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, x-api-key',
             'Access-Control-Max-Age': '86400',
           }
         }
@@ -307,23 +302,26 @@ export async function POST(request: Request): Promise<NextResponse> {
       timestamp: Date.now(),
     });
 
+    // Update response headers to include x-api-key
+    const responseHeaders = {
+      'Cache-Control': 'public, max-age=86400, stale-while-revalidate=3600',
+      'X-Cache': 'MISS',
+      'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'DENY',
+      'X-XSS-Protection': '1; mode=block',
+      'Referrer-Policy': 'strict-origin-when-cross-origin',
+      'Content-Security-Policy': "default-src 'self'",
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, x-api-key',
+      'Access-Control-Max-Age': '86400',
+      'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
+    };
+
     // Return response with security headers
     return NextResponse.json(result, {
       status: matchingVideo ? 200 : 404,
-      headers: {
-        'Cache-Control': 'public, max-age=86400, stale-while-revalidate=3600',
-        'X-Cache': 'MISS',
-        'X-Content-Type-Options': 'nosniff',
-        'X-Frame-Options': 'DENY',
-        'X-XSS-Protection': '1; mode=block',
-        'Referrer-Policy': 'strict-origin-when-cross-origin',
-        'Content-Security-Policy': "default-src 'self' https://www.youtube.com",
-        'Access-Control-Allow-Origin': process.env.ALLOWED_ORIGINS?.split(',')[0] || '',
-        'Access-Control-Allow-Methods': 'POST',
-        'Access-Control-Allow-Headers': 'Content-Type',
-        'Access-Control-Max-Age': '86400',
-        'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
-      },
+      headers: responseHeaders,
     });
 
   } catch (error: unknown) {
@@ -333,12 +331,24 @@ export async function POST(request: Request): Promise<NextResponse> {
       { 
         status: 500,
         headers: {
-          'Access-Control-Allow-Origin': process.env.ALLOWED_ORIGINS?.split(',')[0] || '',
-          'Access-Control-Allow-Methods': 'POST',
-          'Access-Control-Allow-Headers': 'Content-Type',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, x-api-key',
           'Access-Control-Max-Age': '86400',
         }
       }
     );
   }
+}
+
+// Add OPTIONS handler for CORS preflight requests
+export async function OPTIONS() {
+  return NextResponse.json({}, {
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, x-api-key',
+      'Access-Control-Max-Age': '86400',
+    },
+  });
 }
