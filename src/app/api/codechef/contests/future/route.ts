@@ -7,13 +7,29 @@ const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
 const MAX_REQUESTS = 30; // 30 requests per minute (tighter limit)
 
 // In-memory cache
-let cache: { data: any; timestamp: number } | null = null;
+interface CacheData {
+  data: CodechefResponse;
+  timestamp: number;
+}
+let cache: CacheData | null = null;
 const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours (1 day)
+
+interface CodechefResponse {
+  contests: Array<{
+    name: string;
+    startDate: string;
+    endDate: string;
+    url: string;
+  }>;
+}
 
 // Validate request origin
 function validateOrigin(headersList: Headers) {
-  const origin = headersList.get('origin') || '';
+  const origin = headersList.get('origin') || headersList.get('referer') || '';
   const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [];
+  
+  // Allow requests with no origin (like direct browser requests)
+  if (!origin) return true;
   
   // Strict origin checking for production
   return allowedOrigins.some(allowed => 
@@ -45,10 +61,13 @@ function checkRateLimit(ip: string): boolean {
 }
 
 // Validate API response
-function validateApiResponse(data: any): boolean {
+function validateApiResponse(data: unknown): data is CodechefResponse {
   try {
-    // Add your validation logic here
-    return data && typeof data === 'object' && Array.isArray(data.contests);
+    const response = data as CodechefResponse;
+    return Boolean(
+      response?.contests && 
+      Array.isArray(response.contests)
+    );
   } catch (error) {
     console.error('API response validation failed:', error);
     return false;

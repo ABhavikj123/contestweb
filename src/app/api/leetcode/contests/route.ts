@@ -7,7 +7,11 @@ const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
 const MAX_REQUESTS = 30; // 30 requests per minute (tighter limit)
 
 // In-memory cache
-let cache: { data: any; timestamp: number } | null = null;
+interface CacheData {
+  data: LeetCodeResponse;
+  timestamp: number;
+}
+let cache: CacheData | null = null;
 const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours (1 day)
 
 interface LeetCodeResponse {
@@ -24,8 +28,11 @@ interface LeetCodeResponse {
 
 // Validate request origin
 function validateOrigin(headersList: Headers) {
-  const origin = headersList.get('origin') || '';
+  const origin = headersList.get('origin') || headersList.get('referer') || '';
   const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [];
+  
+  // Allow requests with no origin (like direct browser requests)
+  if (!origin) return true;
   
   // Strict origin checking for production
   return allowedOrigins.some(allowed => 
@@ -57,9 +64,13 @@ function checkRateLimit(ip: string): boolean {
 }
 
 // Validate API response
-function validateApiResponse(data: any): boolean {
+function validateApiResponse(data: unknown): data is LeetCodeResponse {
   try {
-    return data?.data?.pastContests?.data && Array.isArray(data.data.pastContests.data);
+    const response = data as LeetCodeResponse;
+    return Boolean(
+      response?.data?.pastContests?.data && 
+      Array.isArray(response.data.pastContests.data)
+    );
   } catch (error) {
     console.error('API response validation failed:', error);
     return false;

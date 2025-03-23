@@ -7,7 +7,11 @@ const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
 const MAX_REQUESTS = 30; // 30 requests per minute (tighter limit)
 
 // In-memory cache
-let cache: { data: any; timestamp: number } | null = null;
+interface CacheData {
+  data: LeetCodeResponse;
+  timestamp: number;
+}
+let cache: CacheData | null = null;
 const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours (1 day)
 
 interface LeetCodeResponse {
@@ -57,9 +61,13 @@ function checkRateLimit(ip: string): boolean {
 }
 
 // Validate API response
-function validateApiResponse(data: any): boolean {
+function validateApiResponse(data: unknown): data is LeetCodeResponse {
   try {
-    return data?.data?.topTwoContests && Array.isArray(data.data.topTwoContests);
+    const response = data as LeetCodeResponse;
+    return Boolean(
+      response?.data?.topTwoContests && 
+      Array.isArray(response.data.topTwoContests)
+    );
   } catch (error) {
     console.error('API response validation failed:', error);
     return false;

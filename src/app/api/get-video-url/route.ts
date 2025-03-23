@@ -7,7 +7,14 @@ const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
 const MAX_REQUESTS = 30; // 30 requests per minute (tighter limit)
 
 // In-memory cache
-const cache = new Map<string, { data: any; timestamp: number }>();
+interface CacheData {
+  data: {
+    videoUrl?: string;
+    error?: string;
+  };
+  timestamp: number;
+}
+const cache = new Map<string, CacheData>();
 const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours (1 day)
 
 // Type definitions for YouTube's ytInitialData structure
