@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { headers } from 'next/headers';
 import { checkRateLimit } from '@/lib/rate-limit';
 
-// Cache types
 interface CacheData {
   videoUrl: string | null;
 }
@@ -16,12 +15,10 @@ interface Cache {
   [key: string]: CacheEntry;
 }
 
-// Simple in-memory cache
 const cache: Cache = {};
-const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
-const REQUEST_TIMEOUT = 5000; // 5 seconds timeout
+const CACHE_TTL = 24 * 60 * 60 * 1000; 
+const REQUEST_TIMEOUT = 5000; 
 
-// Type definitions for YouTube's ytInitialData structure
 interface YtInitialData {
   contents?: {
     twoColumnSearchResultsRenderer?: {
@@ -94,7 +91,6 @@ const fetchWithTimeout = async (url: string, options: RequestInit = {}) => {
 
 export async function POST(request: Request): Promise<NextResponse> {
   try {
-    // Get client IP for rate limiting
     const headersList = await headers();
     const ip = headersList.get('x-forwarded-for') || 'unknown';
     
