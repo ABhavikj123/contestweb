@@ -4,7 +4,7 @@ import "./globals.css";
 import ClientProvider from "../components/ClientProvider";
 import { ThemeProvider } from "../components/ThemeProvider";
 import CommonLayout from "../components/CommonLayout";
-
+import { SpeedInsights } from '@vercel/speed-insights/next';
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -30,7 +30,9 @@ export default function RootLayout({
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <ClientProvider>
           <ThemeProvider>
-            <CommonLayout>{children}</CommonLayout>
+            <CommonLayout>{children}
+            <SpeedInsights />
+            </CommonLayout>
           </ThemeProvider>
         </ClientProvider>
       </body>
